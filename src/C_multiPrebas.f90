@@ -57,8 +57,8 @@ real (kind=8), intent(inout) :: siteInfoDist(nSites,10), outDist(nSites,maxYears
  real (kind=8), intent(inout) :: soilC(nSites,maxYears,5,3,maxNlayers),soilCtot(nSites,maxYears) !dimensions = nyears,AWENH,treeOrgans(woody,fineWoody,Foliage),species
  ! real (kind=8) :: soilC(nSites,maxYears,5,3,maxNlayers),soilCtot(nSites,maxYears) !dimensions = nyears,AWENH,treeOrgans(woody,fineWoody,Foliage),species
  real (kind=8), intent(in) :: pYasso(35), weatherYasso(nClimID,maxYears,3),litterSize(3,allSP) !litterSize dimensions: treeOrgans,species
- real (kind=8) :: output(maxYears,nVar,maxNlayers,2),totBA(nSites), relBA(nSites,maxNlayers),mortModX
- real (kind=8) :: ClCutX, HarvArea,defaultThinX,maxState(nSites),check(maxYears), thinningX(maxThin,11)
+ real (kind=8) :: totBA(nSites), relBA(nSites,maxNlayers),mortModX
+ real (kind=8) :: ClCutX, HarvArea,defaultThinX,maxState(nSites),check(maxYears)
  integer :: maxYearSite = 300,yearX(nSites),Ainit,sitex,ops(1),species
 
  integer :: etmodel,CO2model, gvRun, fertThin, ECMmod, oldLayer !not direct inputs anymore, but in prebasFlags fvec !wdimpl pflags
@@ -81,24 +81,30 @@ CO2model = prebasFlags(7)
 ! open(1,file="test1.txt")
 ! open(2,file="test2.txt")
 
-output = 0.
 yearX = 0.
 multiEnergyWood = 0.
 !soilC = soilCinOut
 !soilCtot = soilCtotInOut
+
+! ---- initBiomasses loop: copy non-contiguous slices into contiguous temporaries ----
 do i = 1,nSites
  do ijj = 1,nLayers(i)
   species = int(initVar(i,1,ijj))
-!    initVar(i,7,ijj) = max(0.,pCrobas(38,species)/pCrobas(15,species) * (initVar(i,3,ijj) -&
-!      initVar(i,6,ijj))**pCrobas(11,species))!A = p_ksi/p_rhof * Lc^p_z
-  call initBiomasses(pCrobas(:,species),initVar(i,:,ijj),siteInfo(i,3),multiOut(i,1,:,ijj,1),nVar,npar)
+  block
+    real(kind=8) :: initVar_ib(7), biomasses_ib(nVar)
+    initVar_ib(:) = initVar(i,:,ijj)
+    biomasses_ib(:) = multiOut(i,1,:,ijj,1)
+    call initBiomasses(pCrobas(:,species),initVar_ib,siteInfo(i,3),biomasses_ib,nVar,npar)
+    initVar(i,:,ijj) = initVar_ib(:)
+    multiOut(i,1,:,ijj,1) = biomasses_ib(:)
+  end block
  enddo
 enddo
 
+! ---- main per-site prebas loop ----
 do i = 1,nSites
  prebasFlags(8) = int(multiOut(i,1,7,1,2))
  multiOut(i,1,7,1,2) = 0.
- output(:,:,:,:) = multiOut(i,:,:,:,:)
 
   climID = siteInfo(i,2)
   defaultThinX = defaultThin(i)
@@ -107,37 +113,107 @@ do i = 1,nSites
   !!!##set mortality model for managed and unmanaged forests
   mortModX = mortMod(1) !!mortality model to be used in the managed forests
   if(ClCut(i) < 0.5 .and. defaultThin(i) < 0.5) mortModX = mortMod(2) !!mortality model to be used in the unmanaged forests
-  
-  thinningX = thinning(i,:,:)
-  ! nYears(i) = nYears(i)
-    call prebas(nYears(i),nLayers(i),allSP,siteInfo(i,:),pCrobas,initVar(i,:,1:nLayers(i)),&
-    thinningX(1:nThinning(i),:),output(1:nYears(i),:,1:nLayers(i),:),nThinning(i),maxYearSite,fAPAR(i,1:nYears(i)), &
-    initClearcut(i,:),fixBAinitClarcut(i),initCLcutRatio(i,1:nLayers(i)),ETSy(climID,1:nYears(i)),&
-    P0y(climID,1:nYears(i),:),weatherPRELES(climID,1:nYears(i),:,:),DOY,pPRELES, &
-    soilC(i,1:nYears(i),:,:,1:nLayers(i)),pYasso,pAWEN,weatherYasso(climID,1:nYears(i),:),&
-    litterSize,soilCtot(i,1:nYears(i)),defaultThinX,&
-    ClCutX,energyCuts(i),clct_pars(i,:,:),dailyPRELES(i,1:(nYears(i)*365),:),yassoRun(i),&
-    multiEnergyWood(i,1:nYears(i),1:nLayers(i),:),tapioPars,thdPer(i),limPer(i),ftTapio,tTapio,&
-    GVout(i,1:nYears(i),:),thinInt(i), &
-    flagFert,nYearsFert,mortModX,pECMmod,layerPRELES,LUEtrees,LUEgv, & !protect removed btw nYearsFert and mortModX, neither in prebas subroutine nor multiPrebas() R function
-    siteInfoDist(i,:), outDist(i,1:nYears(i),:), prebasFlags,latitude(i), TsumSBBs(i,:))
-    
-    ! pre flag vectorisatio:
-    ! call prebas(nYears(i),nLayers(i),allSP,siteInfo(i,:),pCrobas,initVar(i,:,1:nLayers(i)),&
-    ! thinningX(1:nThinning(i),:),output(1:nYears(i),:,1:nLayers(i),:),nThinning(i),maxYearSite,fAPAR(i,1:nYears(i)), &
-    ! initClearcut(i,:),fixBAinitClarcut(i),initCLcutRatio(i,1:nLayers(i)),ETSy(climID,1:nYears(i)),&
-    ! P0y(climID,1:nYears(i),:),weatherPRELES(climID,1:nYears(i),:,:),DOY,pPRELES,etmodel, &
-    ! soilC(i,1:nYears(i),:,:,1:nLayers(i)),pYasso,pAWEN,weatherYasso(climID,1:nYears(i),:),&
-    ! litterSize,soilCtot(i,1:nYears(i)),defaultThinX,&
-    ! ClCutX,energyCuts(i),inDclct(i,:),inAclct(i,:),dailyPRELES(i,1:(nYears(i)*365),:),yassoRun(i),&
-    ! multiEnergyWood(i,1:nYears(i),1:nLayers(i),:),tapioPars,thdPer(i),limPer(i),ftTapio,tTapio,&
-    ! GVout(i,1:nYears(i),:),GVrun,thinInt(i), &
-    ! fertThin,flagFert,nYearsFert,protect,mortModX,ECMmod,pECMmod,layerPRELES,LUEtrees,LUEgv, &
-    ! disturbanceON, siteInfoDist(i,:), outDist(i,1:nYears(i),:))
-    
-    
-    
-    multiOut(i,1:nYears(i),:,1:nLayers(i),:) = output(1:nYears(i),:,1:nLayers(i),:)
+
+  ! Copy non-contiguous per-site sections into contiguous work buffers before
+  ! passing them to callees with explicit-shape dummy arrays. Some compilers
+  ! materialize temporaries for these calls, but others do not, which can make
+  ! the callee read the wrong stride. Large work arrays are heap-backed here to
+  ! avoid exhausting the limited WebAssembly stack.
+  block
+    ! Small fixed-size temporaries.
+    real(kind=8) :: siteInfo_tmp(11)
+    real(kind=8) :: initClearcut_tmp(5)
+    real(kind=8) :: siteInfoDist_tmp(10)
+    real(kind=8) :: TsumSBBs_tmp(4)
+
+    ! Small 2-D temporaries with bounded extents.
+    real(kind=8) :: clct_pars_tmp(allSP, 3)
+
+    ! Large variable-size temporaries are heap-backed to keep the Wasm stack small.
+    real(kind=8), allocatable :: initCLcutRatio_tmp(:)
+    real(kind=8), allocatable :: fAPAR_tmp(:)
+    real(kind=8), allocatable :: ETSy_tmp(:)
+    real(kind=8), allocatable :: soilCtot_tmp(:)
+    real(kind=8), allocatable :: initVar_tmp(:,:)
+    real(kind=8), allocatable :: thinning_tmp(:,:)
+    real(kind=8), allocatable :: output_tmp(:,:,:,:)
+    real(kind=8), allocatable :: P0y_tmp(:,:)
+    real(kind=8), allocatable :: weatherPRELES_tmp(:,:,:)
+    real(kind=8), allocatable :: soilC_tmp(:,:,:,:)
+    real(kind=8), allocatable :: weatherYasso_tmp(:,:)
+    real(kind=8), allocatable :: dailyPRELES_tmp(:,:)
+    real(kind=8), allocatable :: energyWood_tmp(:,:,:)
+    real(kind=8), allocatable :: GVout_tmp(:,:)
+    real(kind=8), allocatable :: outDist_tmp(:,:)
+
+    allocate(initCLcutRatio_tmp(maxNlayers))
+    allocate(fAPAR_tmp(maxYears))
+    allocate(ETSy_tmp(maxYears))
+    allocate(soilCtot_tmp(maxYears))
+    allocate(initVar_tmp(7, maxNlayers))
+    allocate(thinning_tmp(nThinning(i), 11))
+    allocate(output_tmp(nYears(i), nVar, nLayers(i), 2))
+    allocate(P0y_tmp(nYears(i), 2))
+    allocate(weatherPRELES_tmp(nYears(i), 365, 5))
+    allocate(soilC_tmp(nYears(i), 5, 3, nLayers(i)))
+    allocate(weatherYasso_tmp(nYears(i), 3))
+    allocate(dailyPRELES_tmp(nYears(i)*365, 3))
+    allocate(energyWood_tmp(nYears(i), nLayers(i), 2))
+    allocate(GVout_tmp(nYears(i), 5))
+    allocate(outDist_tmp(nYears(i), 10))
+
+    ! ---- copy in ----
+    siteInfo_tmp(:) = siteInfo(i,:)
+    initVar_tmp(:, 1:nLayers(i)) = initVar(i,:,1:nLayers(i))
+    thinning_tmp(:,:) = thinning(i, 1:nThinning(i), :)
+    output_tmp(:,:,:,:) = multiOut(i, 1:nYears(i), :, 1:nLayers(i), :)
+    fAPAR_tmp(1:nYears(i)) = fAPAR(i, 1:nYears(i))
+    initClearcut_tmp(:) = initClearcut(i,:)
+    initCLcutRatio_tmp(1:nLayers(i)) = initCLcutRatio(i, 1:nLayers(i))
+    ETSy_tmp(1:nYears(i)) = ETSy(climID, 1:nYears(i))
+    P0y_tmp(:,:) = P0y(climID, 1:nYears(i), :)
+    weatherPRELES_tmp(:,:,:) = weatherPRELES(climID, 1:nYears(i), :, :)
+    soilC_tmp(:,:,:,:) = soilC(i, 1:nYears(i), :, :, 1:nLayers(i))
+    weatherYasso_tmp(:,:) = weatherYasso(climID, 1:nYears(i), :)
+    soilCtot_tmp(1:nYears(i)) = soilCtot(i, 1:nYears(i))
+    clct_pars_tmp(:,:) = clct_pars(i,:,:)
+    dailyPRELES_tmp(:,:) = dailyPRELES(i, 1:(nYears(i)*365), :)
+    energyWood_tmp(:,:,:) = multiEnergyWood(i, 1:nYears(i), 1:nLayers(i), :)
+    GVout_tmp(:,:) = GVout(i, 1:nYears(i), :)
+    siteInfoDist_tmp(:) = siteInfoDist(i,:)
+    outDist_tmp(:,:) = outDist(i, 1:nYears(i), :)
+    TsumSBBs_tmp(:) = TsumSBBs(i,:)
+
+    call prebas(nYears(i),nLayers(i),allSP,siteInfo_tmp,pCrobas,initVar_tmp,&
+    thinning_tmp,output_tmp,nThinning(i),maxYearSite,fAPAR_tmp, &
+    initClearcut_tmp,fixBAinitClarcut(i),initCLcutRatio_tmp,ETSy_tmp,&
+    P0y_tmp,weatherPRELES_tmp,DOY,pPRELES, &
+    soilC_tmp,pYasso,pAWEN,weatherYasso_tmp,&
+    litterSize,soilCtot_tmp,defaultThinX,&
+    ClCutX,energyCuts(i),clct_pars_tmp,dailyPRELES_tmp,yassoRun(i),&
+    energyWood_tmp,tapioPars,thdPer(i),limPer(i),ftTapio,tTapio,&
+    GVout_tmp,thinInt(i), &
+    flagFert,nYearsFert,mortModX,pECMmod,layerPRELES,LUEtrees,LUEgv, &
+    siteInfoDist_tmp, outDist_tmp, prebasFlags,latitude(i), TsumSBBs_tmp)
+
+    ! ---- copy back (inout arguments) ----
+    siteInfo(i,:) = siteInfo_tmp(:)
+    initVar(i,:,1:nLayers(i)) = initVar_tmp(:, 1:nLayers(i))
+    multiOut(i, 1:nYears(i), :, 1:nLayers(i), :) = output_tmp(:,:,:,:)
+    fAPAR(i, 1:nYears(i)) = fAPAR_tmp(1:nYears(i))
+    initClearcut(i,:) = initClearcut_tmp(:)
+    initCLcutRatio(i, 1:nLayers(i)) = initCLcutRatio_tmp(1:nLayers(i))
+    ETSy(climID, 1:nYears(i)) = ETSy_tmp(1:nYears(i))
+    P0y(climID, 1:nYears(i), :) = P0y_tmp(:,:)
+    soilC(i, 1:nYears(i), :, :, 1:nLayers(i)) = soilC_tmp(:,:,:,:)
+    soilCtot(i, 1:nYears(i)) = soilCtot_tmp(1:nYears(i))
+    dailyPRELES(i, 1:(nYears(i)*365), :) = dailyPRELES_tmp(:,:)
+    multiEnergyWood(i, 1:nYears(i), 1:nLayers(i), :) = energyWood_tmp(:,:,:)
+    GVout(i, 1:nYears(i), :) = GVout_tmp(:,:)
+    siteInfoDist(i,:) = siteInfoDist_tmp(:)
+    outDist(i, 1:nYears(i), :) = outDist_tmp(:,:)
+    TsumSBBs(i,:) = TsumSBBs_tmp(:)
+  end block
 end do
  ! close(1)
  ! close(2)
