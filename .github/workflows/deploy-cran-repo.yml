@@ -1,26 +1,49 @@
-# Workflow derived from https://github.com/r-wasm/actions/tree/v2/examples
-# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
-on:
-  push:
-    # Only build on main or master branch
-    branches: [main, master]
-  # Or when triggered manually
-  workflow_dispatch: {}
+# Build Rprebasso for WebR (WebAssembly) and deploy as a CRAN-like
+# repository to GitHub Pages.
+#
+# After deployment, install with:
+#   install.packages("Rprebasso",
+#     repos = c("https://hamk-uas.github.io/Rprebasso-WebR/",
+#               "https://repo.r-wasm.org/"))
 
 name: Build and deploy wasm R package repository
 
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+permissions:
+  repository-projects: read
+  pages: write
+  id-token: write
+
 jobs:
-  # Reads `./packages` for package references to put
-  # into a CRAN-like repository hosted on GitHub pages
-  deploy-cran-repo:
-    uses: r-wasm/actions/.github/workflows/deploy-cran-repo.yml@v2
-    with:
-      packages: |
-        local::.
-      compress: true  # Enable compression to include VFS metadata
-    permissions:
-      # To download GitHub Packages within action
-      repository-projects: read
-      # For publishing to pages environment
-      pages: write
-      id-token: write
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build WASM package
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ghcr.io/r-wasm/webr:main
+          options: -v ${{ github.workspace }}:/work -w /work
+          run: |
+            mkdir -p _site
+            Rscript -e 'rwasm::add_pkg("local::.", repo_dir = "_site", compress = TRUE)'
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
