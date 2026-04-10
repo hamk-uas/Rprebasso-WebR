@@ -219,13 +219,18 @@ InitMultiSite <- function(nYearsMS,
   if(!all((1:nClimID) %in% climIDs) | length(climIDs) != nSites) warning("check consistency between weather inputs and climIDs")
   if(nClimID == 1){
     nClimID = 2
-    climIDs[1] <- 2
-    siteInfo[1,2] <- 2
-    PAR = matrix(PAR,2,length(PAR),byrow = T)
-    TAir = matrix(TAir,2,length(TAir),byrow = T)
-    VPD = matrix(VPD,2,length(VPD),byrow = T)
-    Precip = matrix(Precip,2,length(Precip),byrow = T)
-    CO2 <- matrix(CO2,2,length(CO2),byrow = T)
+    # Ensure weather inputs are single-row matrices, then duplicate the row.
+    # Do NOT change climIDs or siteInfo — all sites still point to climID 1.
+    if(!is.matrix(PAR)) PAR = matrix(PAR, nrow=1)
+    if(!is.matrix(TAir)) TAir = matrix(TAir, nrow=1)
+    if(!is.matrix(VPD)) VPD = matrix(VPD, nrow=1)
+    if(!is.matrix(Precip)) Precip = matrix(Precip, nrow=1)
+    if(!is.matrix(CO2)) CO2 = matrix(CO2, nrow=1)
+    PAR = rbind(PAR, PAR[1,])
+    TAir = rbind(TAir, TAir[1,])
+    VPD = rbind(VPD, VPD[1,])
+    Precip = rbind(Precip, Precip[1,])
+    CO2 = rbind(CO2, CO2[1,])
   }
   
   maxYears <- max(nYearsMS)
@@ -285,7 +290,9 @@ InitMultiSite <- function(nYearsMS,
   ###process ETS
   multiETS <- matrix(NA,nClimID,maxYears)
   for(climID in 1:nClimID){
-    nYearsX <- max(nYearsMS[which(siteInfo[,2]==climID)])
+    sitesForClim <- which(siteInfo[,2]==climID)
+    if(length(sitesForClim) == 0) next
+    nYearsX <- max(nYearsMS[sitesForClim])
     Temp <- TAir[climID,1:(365*nYearsX)]-5
     ETS <- pmax(0,Temp,na.rm=T)
     ETS <- matrix(ETS,365,nYearsX); ETS <- colSums(ETS)
@@ -382,7 +389,9 @@ InitMultiSite <- function(nYearsMS,
   
   ##extract weather inputs
   for(i in 1:nClimID){
-    nYearsX <- max(nYearsMS[which(climIDs==i)])
+    sitesForClim <- which(climIDs==i)
+    if(length(sitesForClim) == 0) next
+    nYearsX <- max(nYearsMS[sitesForClim])
     weatherPreles <- array(c(PAR[i,1:(365*nYearsX)],TAir[i,1:(365*nYearsX)],
                              VPD[i,1:(365*nYearsX)],Precip[i,1:(365*nYearsX)],
                              CO2[i,1:(365*nYearsX)]),dim=c(365,nYearsX,5))
@@ -523,7 +532,9 @@ InitMultiSite <- function(nYearsMS,
   if(all(is.na(multiP0))){
     multiP0 <- array(NA,dim=c(nClimID,maxYears,2))
     for(climID in 1:nClimID){
-      nYearsX <- max(nYearsMS[which(climIDs==climID)])
+      sitesForClim <- which(climIDs==climID)
+      if(length(sitesForClim) == 0) next
+      nYearsX <- max(nYearsMS[sitesForClim])
       P0 <- PRELES(DOY=rep(1:365,nYearsX),PAR=PAR[climID,1:(365*nYearsX)],
                    TAir=TAir[climID,1:(365*nYearsX)],VPD=VPD[climID,1:(365*nYearsX)],
                    Precip=Precip[climID,1:(365*nYearsX)],CO2=CO2[climID,1:(365*nYearsX)],
