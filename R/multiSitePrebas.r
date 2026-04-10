@@ -187,6 +187,7 @@ InitMultiSite <- function(nYearsMS,
     siteInfo = matrix(c(1,1,3,160,0,0,20,3,3,413.,0.45,0.118,3),nSites,13,byrow = T) ###default values for nspecies and site type = 3
     siteInfo[,1] <- 1:nSites
   }
+  siteInfo <- as.matrix(siteInfo)
   ### automatically add tauDrainage if missing ###
   if(dim(siteInfo)[2]==12) siteInfo <- cbind(siteInfo,pPRELES[4])
   ### --- ###  
@@ -309,16 +310,18 @@ InitMultiSite <- function(nYearsMS,
   multiETS[which(is.na(multiETS))] <- 0.
   ####process clearcut
   for(i in 1: nSites){
-    if(ClCut[i]==1 & all(is.na(inDclct[i,]))) inDclct[i,] <-
-        c(ClCutD_Pine(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
+    if(ClCut[i]==1 & all(is.na(inDclct[i,]))){
+      inDclct[i,] <- inDclct_def[1:allSp]
+      inDclct[i,1:3] <-  c(ClCutD_Pine(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]), #update for pine, spruce and birch in Finland
           ClCutD_Spruce(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
-          ClCutD_Birch(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
-          NA,NA,NA,NA,NA,NA,NA,NA,NA)  ###"fasy","pipi","eugl","rops","popu",'eugrur','piab(DE)','quil')
-    if(ClCut[i]==1 & all(is.na(inAclct[i,]))) inAclct[i,] <-
-        c(ClCutA_Pine(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
-          ClCutA_Spruce(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
-          ClCutA_Birch(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
-          80,50,13,30,50,13,120,100,80)  ###"fasy","pipi","eugl","rops","popu",'eugrur','piab(DE)','quil')
+          ClCutD_Birch(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3])) 
+    } 
+      if(ClCut[i]==1 & all(is.na(inAclct[i,]))){
+        inAclct[i,] <- inAclct_def[1:allSp]
+        inAclct[i,1:3] <- c(ClCutA_Pine(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]), #update for pine, spruce and birch in Finland
+            ClCutA_Spruce(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]),
+            ClCutA_Birch(ETSmean[climIDs[i]],ETSthres,siteInfo[i,3]))
+      } 
     if(any(!is.na(inDclct[i,]))) inDclct[i,is.na(inDclct[i,])] <- max(inDclct[i,],na.rm=T)
     if(all(is.na(inDclct[i,]))) inDclct[i,] <- 9999999.99
     if(any(!is.na(inAclct[i,]))) inAclct[i,is.na(inAclct[i,])] <- max(inAclct[i,],na.rm=T)
@@ -555,7 +558,7 @@ InitMultiSite <- function(nYearsMS,
   
   for(i in 1:maxNlayers){
     sitxx <- which(multiInitVar[,3,i]==0)
-    multiOut[sitxx,,,i,] <- 0.
+    if(length(sitxx)>0) multiOut[sitxx,,,i,] <- 0.
   }
   
   dimnames(multiInitVar) <-  list(site=NULL,
