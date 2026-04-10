@@ -6,9 +6,10 @@ Author: Francesco Minunno, Mikko Peltoniemi
 Maintainer: Francesco Minunno <francesco.minunno@yucatrote.com>
 Description: Implements PRELES,YASSO and PREBAS models to be called from R
 Imports: sm,  dplyr, plyr, data.table, Matrix, zoo, abind
-License: What license is it under?
+License: GPL-3
 Encoding: UTF-8
 LazyData: true
+NeedsCompilation: yes
 RoxygenNote: 7.3.3
 Suggests: 
     rmarkdown,

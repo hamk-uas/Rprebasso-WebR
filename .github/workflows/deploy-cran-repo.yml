@@ -16,7 +16,7 @@ jobs:
     uses: r-wasm/actions/.github/workflows/deploy-cran-repo.yml@v2
     with:
       packages: |
-        ./
+        local::.
       compress: true  # Enable compression to include VFS metadata
     permissions:
       # To download GitHub Packages within action
