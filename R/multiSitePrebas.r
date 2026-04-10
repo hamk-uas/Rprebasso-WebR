@@ -426,6 +426,9 @@ InitMultiSite <- function(nYearsMS,
       multiInitVar <- array(aaply(multiInitVar,1,findHcNAs,pHcMod,pCROBAS,HcModV),dim=c(nSites,7,1))
     }else{
       multiInitVar <- aaply(multiInitVar,1,findHcNAs,pHcMod,pCROBAS,HcModV)
+      if(length(dim(multiInitVar)) == 2){
+        multiInitVar <- array(multiInitVar, dim = c(1, dim(multiInitVar)))
+      }
     }
     
     ###age cannot be lower than 1 year
@@ -503,7 +506,7 @@ InitMultiSite <- function(nYearsMS,
     if(maxNlayers==1){
       initCLcutRatio <- rep(1,nSites)  
     }else{
-      initCLcutRatio <- multiInitVar[,5,]/rowSums(multiInitVar[,5,]) 
+      initCLcutRatio <- multiInitVar[,5,]/rowSums(multiInitVar[,5,,drop=FALSE]) 
     }
   }
   initCLcutRatio[which(is.na(initCLcutRatio))] <- 0.
